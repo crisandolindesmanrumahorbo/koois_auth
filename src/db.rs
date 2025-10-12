@@ -1,5 +1,6 @@
 use crate::auth::model::User;
 use crate::permission::model::Permission;
+use crate::role::model::Role;
 use crate::rolepermissions::model::GetRolePermissions;
 use async_trait::async_trait;
 use sqlx::Pool;
@@ -25,12 +26,19 @@ impl Database {
 pub trait DBConn: Send + Sync + Clone {
     async fn fetch_user(&self, username: &str) -> Result<User, sqlx::Error>;
     async fn insert_user(&self, user: &User) -> Result<i32, sqlx::Error>;
+    async fn insert_role(&self, role: &Role) -> Result<i32, sqlx::Error>;
+    async fn fetch_roles(&self) -> Result<Vec<Role>, sqlx::Error>;
     async fn fetch_role_permissions(
         &self,
         role_id: i32,
     ) -> Result<Vec<GetRolePermissions>, sqlx::Error>;
     async fn fetch_permissions(&self) -> Result<Vec<Permission>, sqlx::Error>;
     async fn insert_permission(&self, permission: &Permission) -> Result<i32, sqlx::Error>;
+    async fn insert_permission_role(
+        &self,
+        role_id: i32,
+        permission_ids: Vec<i32>,
+    ) -> Result<(), sqlx::Error>;
 
     fn print_pool_stats(&self);
 }
@@ -108,5 +116,47 @@ impl DBConn for sqlx::PgPool {
         .fetch_one(self)
         .await?;
         Ok(row.0)
+    }
+
+    async fn insert_role(&self, role: &Role) -> Result<i32, sqlx::Error> {
+        let row: (i32,) = sqlx::query_as(
+            r#"
+            INSERT INTO roles (name, description, created_at) 
+            VALUES ($1, $2, $3) 
+            RETURNING role_id"#,
+        )
+        .bind(&role.name)
+        .bind(&role.description)
+        .bind(&role.created_at)
+        .fetch_one(self)
+        .await?;
+        Ok(row.0)
+    }
+
+    async fn fetch_roles(&self) -> Result<Vec<Role>, sqlx::Error> {
+        sqlx::query_as::<_, Role>(
+            r#"SELECT role_id, name, description, created_at
+            FROM roles"#,
+        )
+        .fetch_all(self)
+        .await
+    }
+
+    async fn insert_permission_role(
+        &self,
+        role_id: i32,
+        permission_ids: Vec<i32>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT $1, UNNEST($2::int[])
+            "#,
+        )
+        .bind(role_id)
+        .bind(&permission_ids)
+        .execute(self)
+        .await?;
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use super::repo::RolePermissionRepository;
 use crate::{
-    constants::{INTERNAL_ERROR, NOT_FOUND, OK_RESPONSE},
+    constants::{BAD_REQUEST, INTERNAL_ERROR, NO_CONTENT, NOT_FOUND, OK_RESPONSE},
     db::DBConn,
     error::CustomError,
     utils::{Claims, ser_to_str},
@@ -55,5 +55,29 @@ where
             }
         };
         (OK_RESPONSE.to_string(), response_json)
+    }
+
+    pub async fn insert_role_permissions(
+        &self,
+        role_id: i32,
+        permission_ids: Vec<i32>,
+    ) -> (String, String) {
+        match self
+            .repository
+            .insert_role_permissions(role_id, permission_ids)
+            .await
+        {
+            Ok(_) => (NO_CONTENT.to_string(), "".to_string()),
+            Err(err) => match err {
+                CustomError::RolePermissionExists => {
+                    eprintln!("Error insert: {:#?}", err);
+                    (BAD_REQUEST.to_string(), "Already registered".to_string())
+                }
+                error => {
+                    eprintln!("Error insert role permission db: {:#?}", error);
+                    (INTERNAL_ERROR.to_string(), "".to_string())
+                }
+            },
+        }
     }
 }

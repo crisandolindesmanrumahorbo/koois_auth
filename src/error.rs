@@ -25,6 +25,12 @@ pub enum CustomError {
 
     #[error("Permission already exists")]
     PermissionExists,
+
+    #[error("Role already exists")]
+    RoleExists,
+
+    #[error("Role Permission already exists")]
+    RolePermissionExists,
 }
 
 impl Debug for CustomError {

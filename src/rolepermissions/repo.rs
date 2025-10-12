@@ -22,4 +22,25 @@ impl<DB: DBConn> RolePermissionRepository<DB> {
                 _ => CustomError::DBError(e),
             })
     }
+
+    pub async fn insert_role_permissions(
+        &self,
+        role_id: i32,
+        permission_ids: Vec<i32>,
+    ) -> Result<(), CustomError> {
+        match self
+            .db
+            .insert_permission_role(role_id, permission_ids)
+            .await
+        {
+            Ok(role_id) => role_id,
+            Err(e) => match e {
+                sqlx::Error::Database(err) if err.is_unique_violation() => {
+                    return Err(CustomError::RolePermissionExists);
+                }
+                _ => return Err(CustomError::DBError(e)),
+            },
+        };
+        Ok(())
+    }
 }
