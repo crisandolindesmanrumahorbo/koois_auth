@@ -35,7 +35,7 @@ where
             }
         };
 
-        let permissions = match self.repository.fetch_permissions(claims.role_id).await {
+        let permissions = match self.repository.fetch_role_permissions(claims.role_id).await {
             Ok(user) => user,
             Err(why) => match why {
                 CustomError::RoleNotFound => {

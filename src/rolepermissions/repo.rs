@@ -10,12 +10,12 @@ impl<DB: DBConn> RolePermissionRepository<DB> {
         RolePermissionRepository { db }
     }
 
-    pub async fn fetch_permissions(
+    pub async fn fetch_role_permissions(
         &self,
         role_id: i32,
     ) -> Result<Vec<GetRolePermissions>, CustomError> {
         self.db
-            .fetch_permissions(role_id)
+            .fetch_role_permissions(role_id)
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => CustomError::RoleNotFound,

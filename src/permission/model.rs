@@ -8,3 +8,9 @@ pub struct Permission {
     pub description: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreatePermission {
+    pub name: String,
+    pub description: String,
+}

@@ -1,4 +1,5 @@
 use crate::auth::model::User;
+use crate::permission::model::Permission;
 use crate::rolepermissions::model::GetRolePermissions;
 use async_trait::async_trait;
 use sqlx::Pool;
@@ -24,8 +25,12 @@ impl Database {
 pub trait DBConn: Send + Sync + Clone {
     async fn fetch_user(&self, username: &str) -> Result<User, sqlx::Error>;
     async fn insert_user(&self, user: &User) -> Result<i32, sqlx::Error>;
-    async fn fetch_permissions(&self, role_id: i32)
-    -> Result<Vec<GetRolePermissions>, sqlx::Error>;
+    async fn fetch_role_permissions(
+        &self,
+        role_id: i32,
+    ) -> Result<Vec<GetRolePermissions>, sqlx::Error>;
+    async fn fetch_permissions(&self) -> Result<Vec<Permission>, sqlx::Error>;
+    async fn insert_permission(&self, permission: &Permission) -> Result<i32, sqlx::Error>;
 
     fn print_pool_stats(&self);
 }
@@ -66,7 +71,7 @@ impl DBConn for sqlx::PgPool {
         );
     }
 
-    async fn fetch_permissions(
+    async fn fetch_role_permissions(
         &self,
         role_id: i32,
     ) -> Result<Vec<GetRolePermissions>, sqlx::Error> {
@@ -79,5 +84,29 @@ impl DBConn for sqlx::PgPool {
         .bind(role_id)
         .fetch_all(self)
         .await
+    }
+
+    async fn fetch_permissions(&self) -> Result<Vec<Permission>, sqlx::Error> {
+        sqlx::query_as::<_, Permission>(
+            r#"SELECT permission_id, name, description, created_at
+            FROM permissions"#,
+        )
+        .fetch_all(self)
+        .await
+    }
+
+    async fn insert_permission(&self, permission: &Permission) -> Result<i32, sqlx::Error> {
+        let row: (i32,) = sqlx::query_as(
+            r#"
+            INSERT INTO permissions (name, description, created_at) 
+            VALUES ($1, $2, $3) 
+            RETURNING permission_id"#,
+        )
+        .bind(&permission.name)
+        .bind(&permission.description)
+        .bind(&permission.created_at)
+        .fetch_one(self)
+        .await?;
+        Ok(row.0)
     }
 }
