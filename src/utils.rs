@@ -1,5 +1,6 @@
+use crate::auth;
+use crate::cfg::CONFIG;
 use crate::error::CustomError;
-use crate::{auth, cfg::get_config};
 use anyhow::{Context, Result};
 use auth::model::User;
 use bcrypt::{DEFAULT_COST, hash, verify};
@@ -11,7 +12,7 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub username: String,
-    pub role_id: String,
+    pub role_id: i32,
 }
 
 pub fn des_from_str<T: for<'a> Deserialize<'a> + Serialize>(
@@ -36,7 +37,7 @@ pub fn is_password_valid(value: &str, value1: &str) -> bool {
 
 fn get_private_key() -> Result<EncodingKey, CustomError> {
     let enc_key =
-        EncodingKey::from_rsa_pem(get_config().jwt_private_key.replace("\\n", "\n").as_bytes())
+        EncodingKey::from_rsa_pem(&CONFIG.jwt_private_key.replace("\\n", "\n").as_bytes())
             .map_err(CustomError::EncodeError)?;
     Ok(enc_key)
 }
@@ -52,7 +53,7 @@ pub fn create_jwt(user: User) -> Result<String> {
         sub: user.user_id.unwrap().to_string(),
         exp: expiration,
         username: user.username.to_string(),
-        role_id: user.role_id.to_string(),
+        role_id: user.role_id,
     };
 
     encode(
@@ -75,9 +76,9 @@ pub fn extract_token(
     })
 }
 
-pub fn verify_jwt(token: &str) -> Result<String, &'static str> {
+pub fn verify_jwt(token: &str) -> Result<Claims, &'static str> {
     let public_key = jsonwebtoken::DecodingKey::from_rsa_pem(
-        get_config().jwt_public_key.replace("\\n", "\n").as_bytes(),
+        &CONFIG.jwt_public_key.replace("\\n", "\n").as_bytes(),
     )
     .expect("Invalid public key");
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
@@ -90,5 +91,5 @@ pub fn verify_jwt(token: &str) -> Result<String, &'static str> {
             "Invalid token"
         })?;
 
-    Ok(token_data.claims.sub)
+    Ok(token_data.claims)
 }

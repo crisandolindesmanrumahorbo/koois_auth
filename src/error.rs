@@ -19,6 +19,9 @@ pub enum CustomError {
 
     #[error("Account already exists")]
     AccountExists,
+
+    #[error("Role not found")]
+    RoleNotFound,
 }
 
 impl Debug for CustomError {

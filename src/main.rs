@@ -1,4 +1,4 @@
-use koois_auth::cfg::{self};
+use koois_auth::cfg::CONFIG;
 use koois_auth::db::Database;
 use koois_auth::server::Server;
 use sqlx::{Pool, Postgres};
@@ -7,11 +7,8 @@ use tokio::sync::oneshot;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
-    // Init config and DB
-    cfg::init_config();
-
     // Init db
-    let db_pool = Database::new_pool(cfg::get_config().database_url).await;
+    let db_pool = Database::new_pool(&CONFIG.database_url).await;
 
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = oneshot::channel();

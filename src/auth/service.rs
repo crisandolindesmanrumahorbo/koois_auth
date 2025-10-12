@@ -1,10 +1,8 @@
-use super::{
-    model::LoginRegister,
-    repo::{AuthRepository, DbConnection},
-};
+use super::{model::LoginRegister, repo::AuthRepository};
 use crate::{
     auth::model::Login,
     constants::{BAD_REQUEST, INTERNAL_ERROR, NO_CONTENT, OK_RESPONSE, UNAUTHORIZED},
+    db::DBConn,
     error::CustomError,
     utils::{
         create_jwt, des_from_str, encrypt, extract_token, is_password_valid, ser_to_str, verify_jwt,
@@ -20,14 +18,14 @@ struct Response {
 
 pub struct AuthService<DB>
 where
-    DB: DbConnection + Send + Sync + 'static,
+    DB: DBConn + Send + Sync + 'static,
 {
     repository: AuthRepository<DB>,
 }
 
 impl<DB> AuthService<DB>
 where
-    DB: DbConnection + Send + Sync + 'static,
+    DB: DBConn + Send + Sync + 'static,
 {
     pub fn new(pool: DB) -> Self {
         AuthService {

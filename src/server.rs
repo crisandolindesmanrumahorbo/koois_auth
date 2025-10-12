@@ -1,29 +1,32 @@
-use crate::auth::repo::DbConnection;
 use crate::auth::service::AuthService;
-use crate::constants::{BAD_REQUEST, NOT_FOUND};
+use crate::constants::NOT_FOUND;
+use crate::db::DBConn;
+use crate::mdw::Middleware;
+use crate::rolepermissions::service::RolePermissionSvc;
 use anyhow::{Context, Result};
-use request_http_parser::parser::{Method, Request};
+use request_http_parser::parser::Method;
 
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpListener;
+use tokio::io::AsyncWriteExt;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot::Receiver;
 
 pub struct Server<DB>
 where
-    DB: DbConnection + Send + Sync + 'static,
+    DB: DBConn + Send + Sync + 'static,
 {
     auth_svc: Arc<AuthService<DB>>,
+    rp_svc: Arc<RolePermissionSvc<DB>>,
 }
 
 impl<DB> Server<DB>
 where
-    DB: DbConnection + Send + Sync + 'static,
+    DB: DBConn + Send + Sync + 'static,
 {
     pub fn new(pool: DB) -> Self {
-        let auth_svc = Arc::new(AuthService::new(pool));
-
-        Self { auth_svc }
+        let auth_svc = Arc::new(AuthService::new(pool.clone()));
+        let rp_svc = Arc::new(RolePermissionSvc::new(pool));
+        Self { auth_svc, rp_svc }
     }
 
     pub async fn start(&self, mut shutdown_rx: Receiver<()>) -> anyhow::Result<()> {
@@ -35,13 +38,13 @@ where
         loop {
             tokio::select! {
                 conn = listener.accept() => {
-                    let (mut stream, _) = conn?;
+                    let (stream, _) = conn?;
 
                     let auth_svc = Arc::clone(&self.auth_svc);
+                    let rp_svc = Arc::clone(&self.rp_svc);
 
                     tokio::spawn(async move {
-                        let (reader, writer) = stream.split();
-                        if let Err(e) = Server::handle_client(reader, writer, &auth_svc).await {
+                        if let Err(e) = Server::handle_client(stream, &auth_svc, &rp_svc).await {
                             eprintln!("Connection error: {}", e);
                         }
                     });
@@ -56,50 +59,29 @@ where
         Ok(())
     }
 
-    pub async fn handle_client<Reader, Writer>(
-        mut reader: Reader,
-        mut writer: Writer,
+    pub async fn handle_client(
+        mut stream: TcpStream,
         auth_svc: &Arc<AuthService<DB>>,
-    ) -> Result<()>
-    where
-        Reader: AsyncRead + Unpin,
-        Writer: AsyncWrite + Unpin,
-    {
-        let mut buffer = [0; 1024];
-        let size = reader
-            .read(&mut buffer)
-            .await
-            .context("Failed to read stream")?;
-        if size >= 1024 {
-            let _ = writer
-                .write_all(format!("{}{}", BAD_REQUEST, "Requets too large").as_bytes())
-                .await
-                .context("Failed to write");
-
-            let _ = writer.flush().await.context("Failed to flush");
-
-            return Ok(());
-        }
-        let request = String::from_utf8_lossy(&buffer[..size]);
-        let request = match Request::new(&request) {
-            Ok(req) => req,
+        rp_svc: &Arc<RolePermissionSvc<DB>>,
+    ) -> Result<()> {
+        let (request, claims) = match Middleware::new(&mut stream).await {
+            Ok((request, user_id)) => (request, user_id),
             Err(e) => {
-                println!("{}", e);
-                let _ = writer
-                    .write_all(format!("{}{}", BAD_REQUEST, e).as_bytes())
-                    .await
-                    .context("Failed to write");
-
-                let _ = writer.flush().await.context("Failed to flush");
+                println!("{:?}", e);
                 return Ok(());
             }
         };
+        let (_, mut writer) = stream.split();
 
         // Route
         let (status_line, content) = match (&request.method, request.path.as_str()) {
             (Method::POST, "/login") => auth_svc.login(&request).await,
             (Method::POST, "/register") => auth_svc.register(&request).await,
-            (Method::GET, "/validate") => auth_svc.validate(&request),
+            (Method::GET, "/protected/validate") => auth_svc.validate(&request),
+            (Method::GET, "/protected/user/permissions") => {
+                rp_svc.get_role_permissions_by_role_id(claims).await
+            }
+
             _ => (NOT_FOUND.to_string(), "404 Not Found".to_string()),
         };
 
