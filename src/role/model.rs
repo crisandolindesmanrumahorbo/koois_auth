@@ -8,3 +8,10 @@ pub struct Role {
     pub description: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateRole {
+    pub name: String,
+    pub description: String,
+    pub permissions: Vec<i32>,
+}
