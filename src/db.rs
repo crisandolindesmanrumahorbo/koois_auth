@@ -47,7 +47,7 @@ pub trait DBConn: Send + Sync + Clone {
 impl DBConn for sqlx::PgPool {
     async fn fetch_user(&self, username: &str) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            r#"SELECT user_id, username, password, role_id, created_at FROM users WHERE username = $1"#,
+            r#"SELECT user_id, username, password, email, provider, provider_id, role_id, created_at FROM users WHERE username = $1"#,
         )
         .bind(username)
         .fetch_one(self)
@@ -56,12 +56,15 @@ impl DBConn for sqlx::PgPool {
     async fn insert_user(&self, user: &User) -> Result<i32, sqlx::Error> {
         let row: (i32,) = sqlx::query_as(
             r#"
-            INSERT INTO users (username, password, role_id, created_at) 
-            VALUES ($1, $2, $3, $4) 
+            INSERT INTO users (username, password, email, provider, provider_id, role_id, created_at) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) 
             RETURNING user_id"#,
         )
         .bind(&user.username)
         .bind(&user.password)
+        .bind(&user.email)
+        .bind(&user.provider)
+        .bind(&user.provider_id)
         .bind(&user.role_id)
         .bind(&user.created_at)
         .fetch_one(self)
