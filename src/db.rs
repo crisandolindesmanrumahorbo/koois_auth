@@ -39,7 +39,7 @@ pub trait DBConn: Send + Sync + Clone {
         role_id: i32,
         permission_ids: Vec<i32>,
     ) -> Result<(), sqlx::Error>;
-
+    async fn update_password(&self, user_id: &str, password: &str) -> Result<i32, sqlx::Error>;
     fn print_pool_stats(&self);
 }
 
@@ -158,5 +158,20 @@ impl DBConn for sqlx::PgPool {
         .execute(self)
         .await?;
         Ok(())
+    }
+
+    async fn update_password(&self, user_id: &str, password: &str) -> Result<i32, sqlx::Error> {
+        let row: (i32,) = sqlx::query_as(
+            r#"
+            UPDATE users
+            SET password = $1 
+            WHERE user_id = $2
+            RETURNING user_id"#,
+        )
+        .bind(password)
+        .bind(user_id.parse::<i32>().expect("Failed to parse to i32"))
+        .fetch_one(self)
+        .await?;
+        Ok(row.0)
     }
 }

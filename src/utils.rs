@@ -7,12 +7,41 @@ use bcrypt::{DEFAULT_COST, hash, verify};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub enum ClaimType {
+    Login,
+    ForgotPassword,
+}
+
+impl TryFrom<&str> for ClaimType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &str) -> Result<Self, anyhow::Error> {
+        match value {
+            "ForgotPassword" => Ok(ClaimType::ForgotPassword),
+            "Login" => Ok(ClaimType::Login),
+            _ => Err(anyhow::anyhow!("Claim type not found")),
+        }
+    }
+}
+
+impl ToString for ClaimType {
+    fn to_string(&self) -> String {
+        match self {
+            ClaimType::ForgotPassword => "ForgotPassword".to_string(),
+            ClaimType::Login => "Login".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub username: String,
     pub role_id: i32,
+    pub claim_type: ClaimType,
 }
 
 pub fn des_from_str<T: for<'a> Deserialize<'a> + Serialize>(
@@ -42,18 +71,25 @@ fn get_private_key() -> Result<EncodingKey, CustomError> {
     Ok(enc_key)
 }
 
-pub fn create_jwt(user: User) -> Result<String> {
+pub fn create_jwt(user: User, claim_type: ClaimType) -> Result<String> {
     let private_key = get_private_key().context("Failed Get Private Key")?;
-    let expiration = Utc::now()
-        .checked_add_signed(Duration::hours(1)) // Token valid for 24 hours
-        .expect("Invalid timestamp")
-        .timestamp() as usize;
-
+    let expiration = match claim_type {
+        ClaimType::Login => Utc::now()
+            .checked_add_signed(Duration::hours(1)) // Token valid for 1 hours
+            .expect("Invalid timestamp")
+            .timestamp() as usize,
+        ClaimType::ForgotPassword => Utc::now()
+            .checked_add_signed(Duration::minutes(15)) // Token valid for 15
+            // minutes
+            .expect("Invalid timestamp")
+            .timestamp() as usize,
+    };
     let claims = Claims {
         sub: user.user_id.unwrap().to_string(),
         exp: expiration,
         username: user.username.to_string(),
         role_id: user.role_id,
+        claim_type,
     };
 
     encode(

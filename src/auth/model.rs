@@ -22,3 +22,14 @@ pub struct LoginRegister {
     pub password: String,
     pub role_id: i32,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct ForgotPassword {
+    pub username: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ResetPassword {
+    pub password: String,
+    pub token: String,
+}

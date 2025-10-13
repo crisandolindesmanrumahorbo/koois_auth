@@ -92,6 +92,8 @@ where
         let (status_line, content) = match (&request.method, request.path.as_str()) {
             (Method::POST, "/login") => auth_svc.login(&request).await,
             (Method::POST, "/register") => auth_svc.register(&request).await,
+            (Method::POST, "/reset-password") => auth_svc.reset_password(&request).await,
+            (Method::POST, "/forgot-password") => auth_svc.forgot_password(&request).await,
             (Method::GET, "/protected/validate") => auth_svc.validate(&request),
             (Method::GET, "/protected/user/role-permissions") => {
                 rp_svc.get_role_permissions_by_role_id(claims).await

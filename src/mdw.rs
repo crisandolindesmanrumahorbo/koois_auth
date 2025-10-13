@@ -13,7 +13,7 @@ pub struct Middleware {}
 
 impl Middleware {
     pub async fn new(stream: &mut TcpStream) -> Result<(Request, Option<Claims>)> {
-        let mut buffer = [0; 1024];
+        let mut buffer = [0; 4096];
         let size = stream
             .read(&mut buffer)
             .await

@@ -33,4 +33,14 @@ impl<DB: DBConn> AuthRepository<DB> {
         };
         Ok(user_id)
     }
+
+    pub async fn update_password(&self, user_id: &str, password: &str) -> Result<i32, CustomError> {
+        let user_id = match self.db.update_password(user_id, password).await {
+            Ok(user_id) => user_id,
+            Err(e) => match e {
+                _ => return Err(CustomError::DBError(e)),
+            },
+        };
+        Ok(user_id)
+    }
 }
