@@ -3,6 +3,8 @@ pub mod cfg;
 pub mod constants;
 pub mod db;
 pub mod error;
+pub mod google;
+pub mod mail;
 pub mod mdw;
 pub mod permission;
 pub mod role;
