@@ -1,4 +1,5 @@
 use crate::{
+    cfg::CONFIG,
     constants::{BAD_REQUEST, UNAUTHORIZED},
     utils::{Claims, extract_token, verify_jwt},
 };
@@ -13,12 +14,12 @@ pub struct Middleware {}
 
 impl Middleware {
     pub async fn new(stream: &mut TcpStream) -> Result<(Request, Option<Claims>)> {
-        let mut buffer = [0; 4096];
+        let mut buffer = vec![0; CONFIG.request_max_byte];
         let size = stream
             .read(&mut buffer)
             .await
             .context("Failed to read stream")?;
-        if size >= 1024 {
+        if size >= CONFIG.request_max_byte {
             let _ = stream
                 .write_all(format!("{}{}", BAD_REQUEST, "Requets too large").as_bytes())
                 .await
