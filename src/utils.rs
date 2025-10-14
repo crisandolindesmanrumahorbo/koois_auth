@@ -71,7 +71,7 @@ fn get_private_key() -> Result<EncodingKey, CustomError> {
     Ok(enc_key)
 }
 
-pub fn create_jwt(user: User, claim_type: ClaimType) -> Result<String> {
+pub fn create_jwt(user: &User, claim_type: ClaimType) -> Result<String> {
     let private_key = get_private_key().context("Failed Get Private Key")?;
     let expiration = match claim_type {
         ClaimType::Login => Utc::now()

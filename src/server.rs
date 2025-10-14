@@ -1,6 +1,8 @@
 use crate::auth::service::AuthService;
+use crate::cfg::CONFIG;
 use crate::constants::NOT_FOUND;
 use crate::db::DBConn;
+use crate::google::GoogleTokenVerifier;
 use crate::mdw::Middleware;
 use crate::permission::service::PermissionSvc;
 use crate::role::service::RoleSvc;
@@ -21,6 +23,7 @@ where
     rp_svc: Arc<RolePermissionSvc<DB>>,
     permission_svc: Arc<PermissionSvc<DB>>,
     role_svc: Arc<RoleSvc<DB>>,
+    go_ver: Arc<GoogleTokenVerifier>,
 }
 
 impl<DB> Server<DB>
@@ -32,11 +35,14 @@ where
         let permission_svc = Arc::new(PermissionSvc::new(pool.clone()));
         let role_svc = Arc::new(RoleSvc::new(pool.clone()));
         let rp_svc = Arc::new(RolePermissionSvc::new(pool));
+        let go_ver = Arc::new(GoogleTokenVerifier::new(CONFIG.google_client_id.clone()));
+
         Self {
             auth_svc,
             rp_svc,
             permission_svc,
             role_svc,
+            go_ver,
         }
     }
 
@@ -55,9 +61,10 @@ where
                     let rp_svc = Arc::clone(&self.rp_svc);
                     let permission_svc = Arc::clone(&self.permission_svc);
                     let role_svc = Arc::clone(&self.role_svc);
+                    let go_ver = Arc::clone(&self.go_ver);
 
                     tokio::spawn(async move {
-                        if let Err(e) = Server::handle_client(stream, &auth_svc, &rp_svc, &permission_svc, &role_svc).await {
+                        if let Err(e) = Server::handle_client(stream, &auth_svc, &rp_svc, &permission_svc, &role_svc, &go_ver).await {
                             eprintln!("Connection error: {}", e);
                         }
                     });
@@ -78,6 +85,7 @@ where
         rp_svc: &Arc<RolePermissionSvc<DB>>,
         permission_svc: &Arc<PermissionSvc<DB>>,
         role_svc: &Arc<RoleSvc<DB>>,
+        go_ver: &Arc<GoogleTokenVerifier>,
     ) -> Result<()> {
         let (request, claims) = match Middleware::new(&mut stream).await {
             Ok((request, user_id)) => (request, user_id),
@@ -94,6 +102,8 @@ where
             (Method::POST, "/register") => auth_svc.register(&request).await,
             (Method::POST, "/reset-password") => auth_svc.reset_password(&request).await,
             (Method::POST, "/forgot-password") => auth_svc.forgot_password(&request).await,
+            (Method::POST, "/signin-google") => auth_svc.signin_google(&request, &go_ver).await,
+            (Method::POST, "/register-google") => auth_svc.register_google(&request, &go_ver).await,
             (Method::GET, "/protected/validate") => auth_svc.validate(&request),
             (Method::GET, "/protected/user/role-permissions") => {
                 rp_svc.get_role_permissions_by_role_id(claims).await
