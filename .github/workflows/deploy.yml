@@ -25,22 +25,15 @@ jobs:
       - name: Verify binary exists
         run: ls -lh target/release/
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Deploy binary to VPS via SCP
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           port: ${{ secrets.VPS_PORT || '22' }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            echo ">>> Updating backend on VPS..."
-            mkdir -p /home/deploy/backend/git_action
-            # Remove old binary safely
-            rm -f /home/deploy/backend/git_action/koois_auth
-            # Copy new binary via SCP (from GitHub runner)
           source: target/release/koois_auth
-          target: /home/deploy/backend/git_action/koois_auth
+          target: /home/deploy/backend/git_action/
 
       - name: Restart systemd service
         uses: appleboy/ssh-action@v1.2.0
@@ -50,7 +43,12 @@ jobs:
           port: ${{ secrets.VPS_PORT || '22' }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            echo ">>> Restarting service..."
+            set -e
+            echo ">>> Setting permissions..."
+            chmod +x /home/deploy/backend/git_action/koois_auth
+
+            echo ">>> Restarting systemd service..."
             sudo systemctl restart koois_auth
             sudo systemctl status koois_auth --no-pager -l
-            echo ">>> ✅ Deployment completed successfully!"
+
+            echo ">>> ✅ Deployment complete!"
