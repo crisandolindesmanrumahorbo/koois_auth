@@ -25,6 +25,9 @@ jobs:
       - name: Verify binary exists
         run: ls -lh target/release/
 
+      - name: Move binary to root
+        run: mv target/release/koois_auth ./koois_auth
+
       - name: Deploy binary to VPS via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -32,7 +35,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           port: ${{ secrets.VPS_PORT || '22' }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: target/release/koois_auth
+          source: ./koois_auth
           target: /home/deploy/backend/git_action/
 
       - name: Restart systemd service
