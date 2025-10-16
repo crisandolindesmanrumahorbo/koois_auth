@@ -1,0 +1,56 @@
+name: Deploy Rust Koois Auth
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Verify binary exists
+        run: ls -lh target/release/
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            echo ">>> Updating backend on VPS..."
+            mkdir -p /home/deploy/backend/git_action
+            # Remove old binary safely
+            rm -f /home/deploy/backend/git_action/koois_auth
+            # Copy new binary via SCP (from GitHub runner)
+          source: target/release/koois_auth
+          target: /home/deploy/backend/git_action/koois_auth
+
+      - name: Restart systemd service
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            echo ">>> Restarting service..."
+            sudo systemctl restart koois_auth
+            sudo systemctl status koois_auth --no-pager -l
+            echo ">>> ✅ Deployment completed successfully!"
