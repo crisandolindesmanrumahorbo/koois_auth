@@ -1,12 +1,13 @@
 use crate::auth::service::AuthService;
 use crate::cfg::CONFIG;
-use crate::constants::NOT_FOUND;
+use crate::constants::{NOT_FOUND, OPTIONS_CORS};
 use crate::db::DBConn;
 use crate::google::GoogleTokenVerifier;
 use crate::mdw::Middleware;
 use crate::permission::service::PermissionSvc;
 use crate::role::service::RoleSvc;
 use crate::rolepermissions::service::RolePermissionSvc;
+use crate::user::service::UserSvc;
 use anyhow::{Context, Result};
 use request_http_parser::parser::Method;
 
@@ -23,6 +24,7 @@ where
     rp_svc: Arc<RolePermissionSvc<DB>>,
     permission_svc: Arc<PermissionSvc<DB>>,
     role_svc: Arc<RoleSvc<DB>>,
+    user_svc: Arc<UserSvc<DB>>,
     go_ver: Arc<GoogleTokenVerifier>,
 }
 
@@ -34,7 +36,9 @@ where
         let auth_svc = Arc::new(AuthService::new(pool.clone()));
         let permission_svc = Arc::new(PermissionSvc::new(pool.clone()));
         let role_svc = Arc::new(RoleSvc::new(pool.clone()));
-        let rp_svc = Arc::new(RolePermissionSvc::new(pool));
+        let rp_svc = Arc::new(RolePermissionSvc::new(pool.clone()));
+        let user_svc = Arc::new(UserSvc::new(pool));
+
         let go_ver = Arc::new(GoogleTokenVerifier::new(CONFIG.google_client_id.clone()));
 
         Self {
@@ -43,6 +47,7 @@ where
             permission_svc,
             role_svc,
             go_ver,
+            user_svc,
         }
     }
 
@@ -61,10 +66,12 @@ where
                     let rp_svc = Arc::clone(&self.rp_svc);
                     let permission_svc = Arc::clone(&self.permission_svc);
                     let role_svc = Arc::clone(&self.role_svc);
+                                        let user_svc = Arc::clone(&self.user_svc);
+
                     let go_ver = Arc::clone(&self.go_ver);
 
                     tokio::spawn(async move {
-                        if let Err(e) = Server::handle_client(stream, &auth_svc, &rp_svc, &permission_svc, &role_svc, &go_ver).await {
+                        if let Err(e) = Server::handle_client(stream, &auth_svc, &rp_svc, &permission_svc, &role_svc, &user_svc, &go_ver).await {
                             eprintln!("Connection error: {}", e);
                         }
                     });
@@ -85,6 +92,7 @@ where
         rp_svc: &Arc<RolePermissionSvc<DB>>,
         permission_svc: &Arc<PermissionSvc<DB>>,
         role_svc: &Arc<RoleSvc<DB>>,
+        user_svc: &Arc<UserSvc<DB>>,
         go_ver: &Arc<GoogleTokenVerifier>,
     ) -> Result<()> {
         let (request, claims) = match Middleware::new(&mut stream).await {
@@ -98,6 +106,7 @@ where
 
         // Route
         let (status_line, content) = match (&request.method, request.path.as_str()) {
+            (Method::OPTIONS, _) => ("".to_string(), OPTIONS_CORS.to_string()),
             (Method::POST, "/login") => auth_svc.login(&request).await,
             (Method::POST, "/register") => auth_svc.register(&request).await,
             (Method::POST, "/reset-password") => auth_svc.reset_password(&request).await,
@@ -116,6 +125,7 @@ where
                 role_svc.create_role(&rp_svc, claims, &request).await
             }
             (Method::GET, "/protected/user/roles") => role_svc.get_roles(claims).await,
+            (Method::GET, "/protected/users") => user_svc.get_users(claims).await,
 
             _ => (NOT_FOUND.to_string(), "404 Not Found".to_string()),
         };

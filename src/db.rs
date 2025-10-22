@@ -2,6 +2,7 @@ use crate::auth::model::User;
 use crate::permission::model::Permission;
 use crate::role::model::Role;
 use crate::rolepermissions::model::GetRolePermissions;
+use crate::user::model::GetUsers;
 use async_trait::async_trait;
 use sqlx::Pool;
 use sqlx::postgres::PgPoolOptions;
@@ -41,6 +42,7 @@ pub trait DBConn: Send + Sync + Clone {
     ) -> Result<(), sqlx::Error>;
     async fn update_password(&self, user_id: &str, password: &str) -> Result<i32, sqlx::Error>;
     fn print_pool_stats(&self);
+    async fn fetch_users(&self) -> Result<Vec<GetUsers>, sqlx::Error>;
 }
 
 #[async_trait]
@@ -176,5 +178,14 @@ impl DBConn for sqlx::PgPool {
         .fetch_one(self)
         .await?;
         Ok(row.0)
+    }
+
+    async fn fetch_users(&self) -> Result<Vec<GetUsers>, sqlx::Error> {
+        sqlx::query_as::<_, GetUsers>(
+            r#"SELECT user_id, username, email, provider, role_id, created_at
+            FROM users"#,
+        )
+        .fetch_all(self)
+        .await
     }
 }

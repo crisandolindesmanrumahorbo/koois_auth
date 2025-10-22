@@ -4,7 +4,7 @@ use crate::{
     utils::{Claims, extract_token, verify_jwt},
 };
 use anyhow::{Context, Result, anyhow};
-use request_http_parser::parser::Request;
+use request_http_parser::parser::{Method, Request};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -30,6 +30,7 @@ impl Middleware {
             return Err(anyhow!("request too large"));
         }
         let req_str = String::from_utf8_lossy(&buffer[..size]);
+        println!("{}", req_str);
         let request = match Request::new(&req_str) {
             Ok(req) => req,
             Err(e) => {
@@ -43,7 +44,7 @@ impl Middleware {
                 return Err(anyhow!("request format invalid"));
             }
         };
-        if !request.path.contains("protected") {
+        if !request.path.contains("protected") || request.method == Method::OPTIONS {
             return Ok((request, None));
         }
 
