@@ -10,4 +10,5 @@ pub mod permission;
 pub mod role;
 pub mod rolepermissions;
 pub mod server;
+pub mod user;
 pub mod utils;
